@@ -1,58 +1,106 @@
-# Towel Binary Patcher 🛠️💻
+# Towel Binary Patcher crack13gui.py 🛠️💻
 
-Welcome to the Towel Binary Patcher! It's your reliable Python GUI tool that specializes in dynamic binary patching tasks! 🎉 Conceived as a Swiss Army Knife 🇨🇭🔪 for tinkering with instructions within executable files, it's a perfect sidekick for your reverse engineering escapades, letting you tweak the behavior of an executable file without breaking a sweat. 🚀
+## 📋 Prerequisites 📋
 
-## 🚀 Getting Started 🚀
+1. **Python 🐍:** The core language in which Towel Binary Patcher is developed. Make sure to have Python 3.7 or newer installed.
 
-### 📋 Prerequisites 📋
+2. **Tkinter 🖼️:** Tkinter is Python's standard GUI package and is used to build the user interface for Towel Binary Patcher.
 
-Towel Binary Patcher is developed using Python 3.7 and relies on several Python packages. Before proceeding, please ensure you have the following dependencies correctly installed:
+3. **OS and Platform 💻🌐:** These are standard libraries in Python and are used for interacting with the operating system and retrieving information about the current platform.
 
-1. **Python:** The core language in which Towel Binary Patcher is developed. Make sure to have Python 3.7 or newer installed.
+4. **Binascii 🔄:** This module converts between binary and ASCII.
 
-2. **OS:** This is a standard library in Python and is used for interacting with the operating system. It comes pre-installed with Python, so no extra steps are needed for this one!
+5. **Pefile and Lief 📚:** These Python modules are used to read and work with PE (Portable Executable) and Mach-O files.
 
-3. **Tkinter:** Tkinter is Python's standard GUI package and is used to build the user interface for Towel Binary Patcher. Like `os`, it's a standard Python library and requires no additional installation.
+6. **Capstone and Keystone ⛰️🏰:** Capstone is a lightweight multi-platform, multi-architecture disassembly framework. Keystone is a lightweight multi-platform, multi-architecture assembler framework.
 
-4. **Binascii:** This module converts between binary and ASCII. It's another standard Python library, so you're already set!
+## 🛠️ Functions 🛠️
 
-5. **Platform:** Used for retrieving information about the platform on which Python is running. It's part of Python's standard library.
+### Existing Functions:
 
-6. **Pefile:** A Python module to read and work with PE (Portable Executable) files. You can install it with `pip install pefile`.
+1. `read_instruction()`: Reads the instruction at a given offset in the binary file.
 
-7. **LIEF:** LIEF provides a set of Python bindings to parse, modify, and abstract ELF, PE, and MachO formats. You can install it with `pip install lief`.
+2. `patch_binary()`: Patches the binary file at a given offset with a new instruction.
 
-8. **Capstone:** Capstone is a lightweight multi-platform, multi-architecture disassembly framework. Install it using `pip install capstone`.
+3. `unpack_binary()` function:
+   - Identifying the entry point
+   - Locate and identify the unpacking stub
+   - Identify the Import Address Table (IAT)
+   - Identify the three parts of the Import Table Address
+   - Modify the unpacking stub
+   - Restore the IAT
 
-9. **Keystone:** Keystone is a lightweight multi-platform, multi-architecture assembler framework. You can install it with `pip install keystone-engine`.
+4. `calculate_offset()`: Calculates the offset based on a base and an additional value.
 
-## Features 🌟
+5. `convert_value()`: Converts the value between binary, decimal, and hexadecimal formats.
 
-* **Browse and Open** 📂: Pick an executable file you'd like to modify.
-* **Read and Disassemble** 📖💡: Dissect instructions at a given offset using the power of the Capstone engine.
-* **Patch Away** 🔧💥: Change the course of your binary's behavior by injecting new instructions.
-* **Offset Calculator** 🧮🎯: Calculate the file offset of an instruction with ease, using base virtual and file offsets.
-* **Conversion Tool** 🔄🔢: Instantly convert values between binary, decimal, and hexadecimal.
-* **String Search** 🔍🔤: Locate specific strings in the binary and discover the file offset of its appearances.
+6. `create_help_box()`: Creates a help box that displays instructions for each field.
 
-## Installation 📥
+7. `get_help_text()`: Returns the help text for a given widget.
 
-To utilize this toolkit, you need Python 3.8 or newer. Don't forget to install the following Python libraries:
+8. `open_offset_calculator()`: Opens a dialog box for calculating offsets.
+
+9. `open_conversion_tool()`: Opens a dialog box for converting values between different number systems.
+
+10. `search_string_in_binary()`: Searches for a string in the binary file and highlights it.
+
+11. `main()`: The main function that initializes and runs the tkinter GUI.
+
+### New Functions:
+
+12. `identify_entry_point(binary)`
+
+13. `locate_unpacking_stub(binary)`
+
+14. `identify_import_table(binary)`
+
+15. `identify_import_descriptor(binary)`
+
+16. `identify_first_thunk(binary)`
+
+17. `identify_original_first_thunk(binary)`
+
+18. `modify_unpacking_stub(binary)`
+
+19. `restore_iat(binary)`
+
+## 📥 Installation 📥
+
+To utilize this toolkit, you need Python 3.7 or newer. Don't forget to install the following Python libraries:
 
 ```bash
 pip install capstone
-pip install tkinter
+pip install pefile
+pip install lief
+pip install keystone-engine
 ```
 
-## Usage 🚀
+## 🚀 Steps To Use 🚀
 
 Fire up the script like this:
 
 ```bash
-python crackgui.py
+python crack13gui.py
 ```
 
-## Essential Concepts 📚
+		Read and Modify Instructions: This tool allows you to read the instruction at a certain offset within the binary and replace it with a different instruction.
+		Architecture Mode: The tool supports both 32-bit and 64-bit architectures.
+		File Offset and Instruction Reading: It provides a functionality to read the current instruction at a specific file offset.
+		Hex, Decimal, and Binary Display: This tool can display the current instruction's representation in binary, decimal, and hexadecimal forms.
+		Search String: The tool provides a functionality to search for a specific string within the binary. This can be useful to find specific markers or messages within the binary.
+		Import Table, Import Address Table, and Import Table Address Identification: This tool can calculate and display the Import Table (IT), Import Address Table (IAT), and Import Table Address (ITA) for the binary.
+		Offset Calculator: The script provides a functionality to calculate the file offset for a specific instruction given the base virtual address and base file offset.
+		Conversion Tool: This script provides a functionality to convert a given value from one base (binary, decimal, hexadecimal) to another base.
+		Unpacking Binary: This script provides functionality to unpack the binary file.
+		Locate Unpacking Stub: The script provides functionality to locate the unpacking stub in the binary.
+		Identify Entry Point: The script provides functionality to identify the entry point in the binary.
+		Identify Import Table: The script provides functionality to identify the import table in the binary.
+		Identify IMAGE_IMPORT_DESCRIPTOR: The script provides functionality to identify the IMAGE_IMPORT_DESCRIPTOR structure in the binary.
+		Identify First Thunk and Original First Thunk: The script provides functionality to identify the First Thunk and the Original First Thunk in the binary.
+		Modify Unpacking Stub: The script provides functionality to modify the unpacking stub in the binary.
+		Restore Import Address Table (IAT): The script provides functionality to restore the Import Address Table (IAT) in the binary.
+		
+## 📚 Essential Concepts 📚
 
 1. **Base Virtual Address (🏠)**: The starting point of your binary in memory - it's akin to your home address. Usual base addresses are `0x00400000` for 32-bit binaries on Windows, `0x140000000` for 64-bit binaries on Windows, and `0x100000000` for 64-bit binaries on macOS.
 
