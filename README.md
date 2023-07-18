@@ -1,6 +1,17 @@
-Sure, here is the updated README file:
+## Dependencies 🛠️
 
-# Towel Binary Patcher crackgui.py 🛠️💻
+1. pefile: `pip install pefile`
+2. lief: `pip install lief`
+3. capstone: `pip install capstone`
+4. keystone-engine: `pip install keystone-engine`
+5. difflib: `pip install difflib` 
+6. obfuscation_detection: `pip install difflib`
+
+Note: If you are installing these packages in a production environment or you want to avoid conflicts with other packages, it might be a good idea to create a [virtual environment](https://docs.python.org/3/tutorial/venv.html) first.
+
+Also, you might need sudo access or add `--user` if you have permission issues while installing, like this: `pip install --user pefile`.
+
+Note: As of my knowledge cutoff in September 2021, some Python modules such as `os`, `tkinter`, `filedialog`, `messagebox`, `binascii`, `platform`, `struct`, `shutil`, `subprocess` are part of Python's standard library, so you don't need to install them with pip.# Towel Binary Patcher crackgui.py 🛠️💻
 
 A comprehensive toolkit for reverse engineering and patching binary files.
 
