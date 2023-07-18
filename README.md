@@ -11,8 +11,6 @@ Note: If you are installing these packages in a production environment or you wa
 
 Also, you might need sudo access or add `--user` if you have permission issues while installing, like this: `pip install --user pefile`.
 
-Note: As of my knowledge cutoff in September 2021, some Python modules such as `os`, `tkinter`, `filedialog`, `messagebox`, `binascii`, `platform`, `struct`, `shutil`, `subprocess` are part of Python's standard library, so you don't need to install them with pip.# Towel Binary Patcher crackgui.py 🛠️💻
-
 A comprehensive toolkit for reverse engineering and patching binary files.
 
 ## 🛠️ Functions 🛠️
