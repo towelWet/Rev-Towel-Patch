@@ -1,4 +1,4 @@
-# crack14gui.py
+# crack16gui.py
 
 import os
 import tkinter as tk
@@ -12,6 +12,469 @@ from keystone import *
 from keystone import Ks, KS_ARCH_X86, KS_MODE_32, KS_MODE_64
 import struct
 import shutil
+import difflib
+import subprocess
+import obfuscation_detection as od
+
+
+
+
+
+def expected_reg(file_path):
+    try:
+        with open(file_path, "rb") as f:
+            data = f.read()
+
+        # Depending on the software type, you might need to use different tools for analysis.
+        # The example below assumes a PE file, but for macOS apps, you might need to use another method.
+
+        pe = pefile.PE(data)
+        product_name = pe.get_string(pe.get_file_header().ProductName)
+        version = pe.get_string(pe.get_file_header().ProductVersion)
+
+        # Identify the key values that are used to activate the software.
+        keys = []
+        for entry in pe.sections:
+            if entry.Name.startswith("REG_"):
+                keys.append(entry.Name[4:])
+
+        # Generate the expected format for a valid .reg file.
+        reg_file = ""
+        for key in keys:
+            reg_file += f"REG_ADD {key} {product_name} {version}\n"
+
+        return reg_file
+
+    except Exception as e:
+        print(e)
+        return None
+
+    
+def generate_expected_reg(file_path):
+    """Generates the expected format for a valid .reg file based on the target software's registration scheme."""
+
+    reg_file = expected_reg(file_path)
+
+    if reg_file is not None:
+        with open(file_path + ".reg", "w") as f:
+            f.write(reg_file)
+
+        messagebox.showinfo("Expected Reg", "The expected .reg file has been generated.")
+    else:
+        messagebox.showinfo("Expected Reg", "The target software does not have a valid registration scheme.")
+    
+    
+    
+
+def create_rarun2_config(args, env_vars, config_file_name):
+    """
+    Creates a rarun2 configuration file.
+
+    Parameters:
+        args (list of str): A list of arguments for the program.
+        env_vars (dict): A dictionary of environment variables for the program.
+        config_file_name (str): The name of the configuration file to be saved.
+
+    Returns:
+        None
+    """
+    program_path = os.path.realpath(__file__)
+    config_file_path = os.path.join(os.path.dirname(program_path), config_file_name)
+    
+    with open(config_file_path, 'w') as file:
+        file.write(f"#!/usr/bin/rarun2\nprogram={program_path}\n")
+
+        for i, arg in enumerate(args):
+            file.write(f"arg{i + 1}={arg}\n")
+
+        for var, value in env_vars.items():
+            file.write(f"setenv={var}={value}\n")
+
+# Call the function to create/update the configuration file
+args = ["arg1", "arg2"]
+env_vars = {"ENV_VAR": "value"}
+config_file_name = "config.rr2"
+
+create_rarun2_config(args, env_vars, config_file_name)
+
+
+def run_radare2_command(binary_file, command):
+    radare2_command = f"r2 -q0 {binary_file} -c '{command};q'"
+    result = subprocess.run(radare2_command, shell=True, capture_output=True)
+    return result.stdout.decode()
+
+def automatic_deobfuscation(binary_file):
+    """
+    Automatically detects and reports common obfuscation techniques in the provided binary file.
+
+    Parameters:
+        binary_file (str): The path to the binary file to be analyzed.
+
+    Returns:
+        result (str): The analysis result.
+    """
+    # Run a radare2 command to disassemble the binary
+    disassembly = run_radare2_command(binary_file, 'aaa;pdf')
+
+    # Look for potential obfuscation techniques in the disassembly
+    result = ""
+
+    # Obfuscation might involve unusual or complex control flow constructs,
+    # such as jumps to computed addresses. Let's look for these.
+    if 'jmp eax' in disassembly or 'jmp [eax]' in disassembly:
+        result += "Potential control flow obfuscation detected: computed jump.\n"
+
+    # Obfuscation might involve data being transformed through various arithmetic operations.
+    # Let's look for sequences of arithmetic operations.
+    if 'add eax,' in disassembly and 'sub eax,' in disassembly:
+        result += "Potential data obfuscation detected: sequences of arithmetic operations.\n"
+
+    # Obfuscation might involve the use of rarely used or complex instructions.
+    # Let's look for these.
+    if 'xlat' in disassembly:
+        result += "Potential instruction obfuscation detected: rarely used instructions.\n"
+
+    if result == "":
+        result = "No common obfuscation techniques detected."
+
+    return result
+
+
+def binary_diffing(binary_file_1, binary_file_2):
+    """
+    Compares two binary files and finds differences between them.
+
+    Parameters:
+        binary_file_1 (str): The path to the first binary file to be compared.
+        binary_file_2 (str): The path to the second binary file to be compared.
+    """
+    # Run the diffoscope command and capture the output
+    cmd = ["diffoscope", binary_file_1, binary_file_2]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+
+    # The differences are in the stdout attribute of the result
+    differences = result.stdout
+
+    # Also capture stderr
+    if result.stderr.strip() != "":
+        differences += "\nErrors or warnings:\n" + result.stderr
+
+    # Create a new Toplevel window
+    new_window = tk.Toplevel()
+    new_window.title("Binary Diffing Results")
+
+    # If there are no differences, show a message indicating that
+    if differences.strip() == "":
+        differences = "The files are identical."
+
+    # Create a Text widget to display the differences
+    text_widget = tk.Text(new_window)
+    text_widget.insert(tk.END, differences)
+    text_widget.pack()
+
+    # Set the focus to the new window
+    new_window.focus_set()
+
+
+
+
+def compare_binaries():
+    binary_file_1 = filedialog.askopenfilename()
+    binary_file_2 = filedialog.askopenfilename()
+    differences = binary_diffing(binary_file_1, binary_file_2)
+
+    # Create a new tkinter window
+    window = tk.Toplevel()
+    window.title("Binary Diff Results")
+
+    # Create a text widget and insert the differences
+    text_widget = tk.Text(window)
+    text_widget.pack(fill='both', expand=True)
+    text_widget.insert('1.0', differences)
+
+
+def binary_analysis_report(file_path, root):
+    # Open a new window
+    report_window = tk.Toplevel(root)
+    report_window.title("Binary Analysis Report")
+    report = ""
+
+    parsers = {
+        '.exe': lief.PE.parse,
+        '.app': lief.MachO.parse
+    }
+
+    # Generate the binary report
+    try:
+        ext = os.path.splitext(file_path)[1]
+        if ext in parsers:
+            binary = parsers[ext](file_path)
+
+            report_parts = [
+                str(binary.header),
+                *(str(section) for section in getattr(binary, 'sections', [])),
+                *(str(symbol) for symbol in getattr(binary, 'symbols', [])),
+            ]
+
+            report = "\n".join(report_parts)
+        else:
+            report = "Unsupported file type"
+    except Exception as e:
+        report = "Failed to generate report: " + str(e)
+
+    # Display the report in the new window
+    report_label = tk.Label(report_window, text=report)
+    report_label.pack()
+
+
+
+def find_code_cave(size):
+    global pe
+    try:
+        # Initialize a counter and start index
+        counter = 0
+        start_index = None
+
+        # Iterate over the memory
+        for section in pe.sections:
+            if section.SizeOfRawData != 0:  # Ignore sections with no data
+                for i in range(section.SizeOfRawData):
+                    # If we find a null byte or NOP, increase the counter and set start index if not already set
+                    if section.get_data()[i:i+1] in [b'\x00', b'\x90']:
+                        counter += 1
+                        if start_index is None:
+                            start_index = i
+                    # If we don't find a null byte or NOP, reset the counter and start index
+                    else:
+                        counter = 0
+                        start_index = None
+
+                    # If the counter reaches the desired size, return the start index
+                    if counter == size:
+                        return start_index + section.VirtualAddress
+
+        # If we didn't find a large enough code cave, return None
+        return None
+    except Exception as e:
+        # Handle any exceptions or error cases
+        messagebox.showerror("Error", str(e))
+        return None
+
+    
+    
+def keygen():
+    """
+    This function should implement the key generation logic.
+    """
+    # TODO: Implement the key generation logic here
+    pass
+    
+
+    
+    
+    
+
+def open_keygen_window():
+    """
+    This function opens a new window with keygen-related components.
+    """
+    keygen_window = tk.Toplevel()
+    keygen_window.title("Keygen")
+
+    tk.Label(keygen_window, text="Enter your name:").grid(row=0, column=0)
+    name_entry = tk.Entry(keygen_window)
+    name_entry.grid(row=0, column=1)
+
+    tk.Label(keygen_window, text="Generated key:").grid(row=1, column=0)
+    key_entry = tk.Entry(keygen_window)
+    key_entry.grid(row=1, column=1)
+
+    tk.Button(
+        keygen_window,
+        text="Generate Key",
+        command=lambda: key_entry.insert(0, keygen(name_entry.get())),  # Call the keygen function with the name entered by the user
+    ).grid(row=2, column=0, columnspan=2)
+    
+    
+    
+    
+def create_code_cave(binary):
+    try:
+        with open(binary, "ab") as file:
+            file.write(b"\x90" * 100)  # Append 100 NOP instructions to the end of the file
+        print("Code cave created.")
+    except Exception as e:
+        print("Error:", str(e))
+
+    
+def identify_anti_debugging_techniques(file_path):
+    results = []  # Define the results list at the top of the function
+    try:
+        # Attempt to parse as a PE file
+        pe = pefile.PE(file_path)
+
+        # Check for the use of the IsDebuggerPresent function
+        for entry in pe.DIRECTORY_ENTRY_IMPORT:
+            for imp in entry.imports:
+                if imp.name == b'IsDebuggerPresent':
+                    results.append("Identify Anti Debugging Techniques function is in development")
+
+    except pefile.PEFormatError:
+        # If a PEFormatError is raised, it's not a PE file
+        try:
+            # Attempt to parse as a Mach-O file
+            binary = lief.parse(file_path)
+
+            # TODO: Implement Mach-O specific anti-debugging detection
+            results.extend(["Mach-O Technique 1", "Mach-O Technique 2"])
+
+        except lief.read_out_of_bound:
+            # If a read_out_of_bound exception is raised, it's not a Mach-O file
+            results.append("File is not a PE or Mach-O file.")
+
+    return results
+
+                
+                
+def display_results(results):
+    """
+    Displays the results in a new Tkinter window.
+
+    Parameters:
+        results (list of str): The list of results to be displayed.
+
+    Returns:
+        None
+    """
+    # Create a new Toplevel window
+    new_window = tk.Toplevel()
+    new_window.title("Anti-Debugging Techniques")
+
+    # Create a Text widget to display the results
+    text_widget = tk.Text(new_window)
+    text_widget.insert(tk.END, '\n'.join(results))
+    text_widget.pack()
+
+    # Set the focus to the new window
+    new_window.focus_set()
+
+
+def interact_tls_callbacks(file_path):
+    """
+    Interacts with the TLS callbacks of a PE file.
+
+    Args:
+        file_path (str): The path to the PE file.
+    """
+
+    # Load the PE file
+    pe = pefile.PE(file_path)
+
+    # Check if the PE file has a TLS section
+    if not hasattr(pe, 'DIRECTORY_ENTRY_TLS'):
+        print('The PE file does not have a TLS section.')
+        return
+
+    # Print the start address of the TLS callback array
+    print(f"Start address of the TLS callback array: {pe.DIRECTORY_ENTRY_TLS.struct.AddressOfCallBacks}")
+
+    # Iterate over the TLS callbacks and print their addresses
+    callback_array_rva = pe.get_rva_from_offset(pe.DIRECTORY_ENTRY_TLS.struct.AddressOfCallBacks)
+    index = 0
+    while True:
+        callback_rva = pe.get_dword_from_data(pe.get_data(callback_array_rva + index * 4, 4), 0)
+        if callback_rva == 0:
+            break
+        print(f"TLS callback at RVA {callback_rva}")
+        index += 1
+
+
+def interact_export_table(binary, export_table_entry):
+    try:
+        pe = pefile.PE(binary)
+        if hasattr(pe, 'DIRECTORY_ENTRY_EXPORT'):
+            print("Exports:")
+            for exp in pe.DIRECTORY_ENTRY_EXPORT.symbols:
+                print(f"{exp.name} at {hex(exp.address)}")
+        else:
+            print("No export table found.")
+    except pefile.PEFormatError:
+        print("Invalid PE file.")
+    except Exception as e:
+        print("Error:", str(e))
+
+
+
+
+def interact_resource_table(file_path):
+    """
+    Interacts with the Resource Table of a PE file.
+
+    Args:
+        file_path (str): The path to the PE file.
+    """
+
+    # Load the PE file
+    pe = pefile.PE(file_path)
+
+    # Check if the PE file has a Resource Table
+    if not hasattr(pe, 'DIRECTORY_ENTRY_RESOURCE'):
+        print('The PE file does not have a Resource Table.')
+        return
+
+    # Iterate over the entries in the Resource Table
+    for resource_type in pe.DIRECTORY_ENTRY_RESOURCE.entries:
+        if resource_type.name is not None:
+            print(f"Resource Type: {resource_type.name}")
+        else:
+            print(f"Resource Type: {pefile.RESOURCE_TYPE.get(resource_type.struct.Id)}")
+
+        if resource_type.directory is not None:
+            for resource_id in resource_type.directory.entries:
+                if resource_id.name is not None:
+                    print(f"Resource Name: {resource_id.name}")
+                else:
+                    print(f"Resource ID: {resource_id.struct.Id}")
+
+                if resource_id.directory is not None:
+                    for resource_lang in resource_id.directory.entries:
+                        print(f"Language ID: {resource_lang.struct.Id}")
+
+
+        
+def interact_relocation_table(binary, relocation_table_entry):
+    try:
+        pe = pefile.PE(binary)
+        if hasattr(pe, 'DIRECTORY_ENTRY_BASERELOC'):
+            print("Relocations:")
+            for base_reloc in pe.DIRECTORY_ENTRY_BASERELOC.entries:
+                print(f"{hex(base_reloc.struct.VirtualAddress)}")
+        else:
+            print("No relocation table found.")
+    except pefile.PEFormatError:
+        print("Invalid PE file.")
+    except Exception as e:
+        print("Error:", str(e))
+    
+
+
+def interact_overlay(binary, overlay_entry):
+    try:
+        pe = pefile.PE(binary)
+        offset = pe.get_overlay_data_start_offset()
+        if offset is not None:
+            print("Overlay found at offset:", hex(offset))
+            overlay = pe.get_overlay()
+            with open(f"{binary}_overlay", "wb") as overlay_file:
+                overlay_file.write(overlay)
+            print("Overlay extracted.")
+        else:
+            print("No overlay found.")
+    except pefile.PEFormatError:
+        print("Invalid PE file.")
+    except Exception as e:
+        print("Error:", str(e))
+
 
 def identify_oep(file_path, oep_entry):
     try:
@@ -27,10 +490,30 @@ def identify_oep(file_path, oep_entry):
         oep_entry.delete(0, tk.END)
         oep_entry.insert(tk.END, "Error: " + str(e))
 
-def dump_unpacked_executable(file_path):
-    # This is highly dependent on the specific packer/protector used and might involve
-    # complex operations like process injection, debugging, etc. More details needed for full implementation.
-    pass
+
+def dump_unpacked_executable(file_path, unpacked_file_path):
+    """
+    Reads the packed executable from `file_path`, unpacks it, and then writes the unpacked executable to `unpacked_file_path`.
+
+    Args:
+        file_path (str): The path to the packed executable.
+        unpacked_file_path (str): The path to save the unpacked executable.
+    """
+
+    # Read the packed executable
+    with open(file_path, "rb") as packed_file:
+        packed_data = packed_file.read()
+
+    # TODO: Unpack the data
+    # This is a placeholder. You'll need to replace this with your actual unpacking logic.
+    unpacked_data = packed_data  # Replace this with the actual unpacking logic
+
+    # Write the unpacked executable
+    with open(unpacked_file_path, "wb") as unpacked_file:
+        unpacked_file.write(unpacked_data)
+
+    print(f"Successfully dumped unpacked executable to {unpacked_file_path}")
+
 
 def identify_import_table_rva(file_path, import_table_rva_entry):
     try:
@@ -47,11 +530,22 @@ def identify_import_table_rva(file_path, import_table_rva_entry):
         import_table_rva_entry.insert(tk.END, "Error: " + str(e))
 
 def fix_dump(file_path):
-    # This function is meant to mimic the "Fix Dump" function in ImpREC.
-    # The full implementation would depend on the specific nature of the fix needed.
-    # This might involve rebuilding the import table, fixing the base address of the binary, etc.
-    # More details would be needed for a full implementation.
-    pass
+    # Load the PE file
+    pe = pefile.PE(file_path)
+
+    # Iterate over the PE's directories
+    for entry in pe.DIRECTORY_ENTRY_IMPORT:
+        # Iterate over the imported functions
+        for imp in entry.imports:
+            # If the address of the function is 0, it means it was not correctly imported
+            if imp.address == 0:
+                print(f"Fixing import: {imp.name}")
+                # TODO: Implement logic to fix the import
+                # This might involve searching for the function in the binary, updating the IAT, etc.
+
+    # Save the fixed executable
+    pe.write(filename=f"{file_path}_fixed")
+
 
 
 def identify_entry_point(binary, root):
@@ -164,6 +658,25 @@ def identify_original_first_thunk(binary, root):
         messagebox.showerror("Error", str(e))
 
 
+def identify_ilt(file_path, ilt_entry):
+    try:
+        pe = pefile.PE(file_path)
+        if hasattr(pe, "DIRECTORY_ENTRY_IMPORT"):
+            import_table = pe.DIRECTORY_ENTRY_IMPORT
+            ilt_rva = import_table[0].original_first_thunk
+            pe.close()
+
+            # Update the entry field with the ILT RVA
+            ilt_entry.delete(0, tk.END)
+            ilt_entry.insert(tk.END, hex(ilt_rva))
+        else:
+            messagebox.showwarning("Warning", "No import table found.")
+    except Exception as e:
+        ilt_entry.delete(0, tk.END)
+        ilt_entry.insert(tk.END, "Error: " + str(e))
+
+        
+        
 def modify_unpacking_stub(binary, root):
     try:
         pe = pefile.PE(binary)
@@ -760,82 +1273,104 @@ def open_conversion_tool():
     ).grid(row=4, column=0, columnspan=2, sticky=tk.W)
 
 
-def update_help_text(event, help_text, help_entry):
-    help_entry["state"] = "normal"
-    help_entry.delete(1.0, tk.END)
-    help_entry.insert(tk.END, help_text.get(str(event.widget), ""))
-    help_entry["state"] = "disabled"
+def update_help_text(event, help_text, help_entry, widget):
+    widget_name = str(widget)
+    if widget_name in help_text:
+        help_entry["state"] = "normal"
+        help_entry.delete(1.0, tk.END)
+        help_entry.insert(tk.END, help_text[widget_name])
+        help_entry["state"] = "disabled"
 
-
-def create_help_box(root, help_text):
+    
+    
+def create_help_box(root, help_text, pages):
     help_entry = tk.Text(root, state="disabled", width=50, height=10)
     help_entry.grid(row=0, column=3, rowspan=7, sticky=(tk.N, tk.S, tk.W, tk.E))
 
-    # Bind focus events to update help text
-    for widget in root.winfo_children():
-        if isinstance(widget, tk.Entry):
-            widget.bind(
-                "<FocusIn>",
-                lambda event: update_help_text(event, help_text, help_entry),
-            )
+    for page in pages:
+        for widget in page.winfo_children():
+            if isinstance(widget, tk.Entry):
+                widget.bind(
+                    "<FocusIn>",
+                    lambda event, widget=widget: update_help_text(event, help_text, help_entry, widget),
+                )
 
     return help_entry
 
+
+
+def raise_frame(frame):
+    frame.tkraise()
 
 def main():
     root = tk.Tk()
     root.title("Binary Patching Tool")
 
+    # Define the frames (pages)
+    page1 = tk.Frame(root)
+    page2 = tk.Frame(root)
+
+    # Grid the frames
+    for frame in (page1, page2):
+        frame.grid(row=0, column=0, sticky='news')
+
+    # Add a button on page1 to navigate to page2
+    tk.Button(page1, text="Next Page", command=lambda: raise_frame(page2)).grid(row=100, column=0)  # Assuming row=100 is available
+
+    # Add a button on page2 to navigate back to page1
+    tk.Button(page2, text="Previous Page", command=lambda: raise_frame(page1)).grid(row=100, column=0)  # Assuming row=100 is available
+
+
     # Add Arch mode selection
-    tk.Label(root, text="Architecture Mode").grid(row=10)
+    tk.Label(page1, text="Architecture Mode").grid(row=10)
     arch_mode = tk.StringVar(root)
     arch_mode.set("64-bit")  # default value
-    tk.OptionMenu(root, arch_mode, "32-bit", "64-bit").grid(row=10, column=1)
+    tk.OptionMenu(page1, arch_mode, "32-bit", "64-bit").grid(row=10, column=1)
 
     # File Selection
-    tk.Label(root, text="File Path").grid(row=0)
-    tk.Label(root, text="Offset").grid(row=1)
-    tk.Label(root, text="Offset Base").grid(row=2)
-    tk.Label(root, text="Current Instruction").grid(row=3)
-    tk.Label(root, text="New Instruction").grid(row=4)
+    tk.Label(page1, text="File Path").grid(row=0)
+    tk.Label(page1, text="Offset").grid(row=1)
+    tk.Label(page1, text="Offset Base").grid(row=2)
+    tk.Label(page1, text="Current Instruction").grid(row=3)
+    tk.Label(page1, text="New Instruction").grid(row=4)
 
-    file_path = tk.Entry(root)
-    offset = tk.Entry(root)
-    instruction = tk.Entry(root)
-    new_instruction = tk.Entry(root)
+    file_path = tk.Entry(page1)
+    offset = tk.Entry(page1)
+    instruction = tk.Entry(page1)
+    new_instruction = tk.Entry(page1)
 
     file_path.grid(row=0, column=1)
     offset.grid(row=1, column=1)
     instruction.grid(row=3, column=1)
     new_instruction.grid(row=4, column=1)
 
-    offset_base = tk.StringVar(root)
+    offset_base = tk.StringVar(page1)
     offset_base.set("16 - HEX")  # default value
-    tk.OptionMenu(root, offset_base, "16 - HEX", "10 - DEC", "2 - BIN").grid(
+    tk.OptionMenu(page1, offset_base, "16 - HEX", "10 - DEC", "2 - BIN").grid(
         row=2, column=1
     )
 
     # Binary
-    tk.Label(root, text="Binary:", fg="red").grid(row=7, column=0)
-    bin_entry = tk.Entry(root, fg="red")
+    tk.Label(page1, text="Binary:", fg="red").grid(row=7, column=0)
+    bin_entry = tk.Entry(page1, fg="red")
     bin_entry.grid(row=7, column=1)
 
     # Decimal
-    tk.Label(root, text="Decimal:", fg="green").grid(row=8, column=0)
-    dec_entry = tk.Entry(root, fg="green")
+    tk.Label(page1, text="Decimal:", fg="green").grid(row=8, column=0)
+    dec_entry = tk.Entry(page1, fg="green")
     dec_entry.grid(row=8, column=1)
 
     # Hexadecimal
-    tk.Label(root, text="Hexadecimal:", fg="blue").grid(row=9, column=0)
-    hex_entry = tk.Entry(root, fg="blue")
+    tk.Label(page1, text="Hexadecimal:", fg="blue").grid(row=9, column=0)
+    hex_entry = tk.Entry(page1, fg="blue")
     hex_entry.grid(row=9, column=1)
 
-    tk.Button(root, text="Browse", command=lambda: browse_files(file_path)).grid(
+    tk.Button(page1, text="Browse", command=lambda: browse_files(file_path)).grid(
         row=0, column=2
     )
 
     tk.Button(
-        root,
+        page1,
         text="Read",
         command=lambda: read_instruction(
             file_path.get(),
@@ -849,7 +1384,7 @@ def main():
         ),
     ).grid(row=1, column=2)
     tk.Button(
-        root,
+        page1,
         text="Patch",
         command=lambda: patch_binary(
             file_path.get(),
@@ -861,7 +1396,7 @@ def main():
     ).grid(row=5, column=1, sticky=tk.W)
 
     tk.Button(
-        root,
+        page1,
         text="Patch",
         command=lambda: patch_binary(
             file_path.get(),
@@ -869,30 +1404,35 @@ def main():
             new_instruction.get(),
             int(offset_base.get().split(" ")[0]),
             arch_mode.get(),
-            root,
+            page1,
         ),
     ).grid(row=5, column=1, sticky=tk.W)
 
     tk.Button(
-        root,
+        page1,
         text="Offset Calculator",
         command=lambda: open_offset_calculator(file_path),
     ).grid(row=6, column=1, sticky=tk.W)
 
-    tk.Button(root, text="Conversion Tool", command=open_conversion_tool).grid(
+    tk.Button(page1, text="Conversion Tool", command=open_conversion_tool).grid(
         row=10, column=3, sticky=tk.W
     )
 
+
+
+
+    # Correctly name the keys in the help_text dictionary to match the widget names
     help_text = {
-        ".!entry": "Enter the path to the executable file. Click 'Browse' to select the file.",
-        ".!entry2": "Enter the file offset of the instruction you want to patch. You can calculate this using the Offset Calculator.",
-        ".!entry3": "This field displays the current instruction at the given offset. Click 'Read' to update it.",
-        ".!entry4": "Enter the new instruction as a hexadecimal number. For example, enter 'EB' for a JMP instruction.",
+        ".!frame.!entry": "Enter the path to the executable file. Click 'Browse' to select the file.",
+        ".!frame.!entry2": "Enter the file offset of the instruction you want to patch. You can calculate this using the Offset Calculator.",
+        ".!frame.!entry3": "This field displays the current instruction at the given offset. Click 'Read' to update it.",
+        ".!frame.!entry4": "Enter the new instruction as a hexadecimal number. For example, enter 'EB' for a JMP instruction.",
+        # ...
     }
 
-    help_entry = create_help_box(root, help_text)
 
-    
+    # Create the help box
+    create_help_box(root, help_text, [page1, page2])
     
     
     
@@ -902,15 +1442,15 @@ def main():
     root.geometry("1400x720")  # Modify these values as needed
 
     # Add Badboy offset section
-    tk.Label(root, text="Badboy Offset").grid(row=13)
-    bad_boy_offset_entry = tk.Entry(root)
+    tk.Label(page1, text="Badboy Offset").grid(row=13)
+    bad_boy_offset_entry = tk.Entry(page1)
     bad_boy_offset_entry.grid(row=13, column=1)
 
     # Add search string functionality
-    tk.Label(root, text="String to Search").grid(row=11)
-    search_string_entry = tk.Entry(root)
+    tk.Label(page1, text="String to Search").grid(row=11)
+    search_string_entry = tk.Entry(page1)
     search_string_entry.grid(row=11, column=1)
-    output_text = tk.Text(root, state="normal", width=40, height=10)
+    output_text = tk.Text(page1, state="normal", width=40, height=10)
     output_text.grid(row=12, column=0, columnspan=3)
 
     output_text.tag_configure("binary", foreground="red")
@@ -918,7 +1458,7 @@ def main():
     output_text.tag_configure("hex", foreground="blue")
 
     tk.Button(
-        root,
+        page1,
         text="Search String",
         command=lambda: search_string_in_binary(
             file_path.get(),
@@ -929,158 +1469,351 @@ def main():
     ).grid(row=11, column=2)
 
     # Add RVA, IAT, and ITA
-    tk.Label(root, text="Relative Virtual Address (RVA)").grid(row=14)
-    rva_entry = tk.Entry(root)
+    tk.Label(page1, text="Relative Virtual Address (RVA)").grid(row=14)
+    rva_entry = tk.Entry(page1)
     rva_entry.grid(row=14, column=1)
 
-    tk.Label(root, text="Import Address Table (IAT)").grid(row=15)
-    iat_entry = tk.Entry(root)
+    tk.Label(page1, text="Import Address Table (IAT)").grid(row=15)
+    iat_entry = tk.Entry(page1)
     iat_entry.grid(row=15, column=1)
 
-    tk.Label(root, text="Import Table Address (ITA)").grid(row=16)
-    ita_entry = tk.Entry(root)
+    tk.Label(page1, text="Import Table Address (ITA)").grid(row=16)
+    ita_entry = tk.Entry(page1)
     ita_entry.grid(row=16, column=1)
 
     tk.Button(
-        root,
+        page1,
         text="Get RVA",
         command=lambda: calculate_rva(file_path.get(), rva_entry),
     ).grid(row=14, column=2)
 
     tk.Button(
-        root,
+        page1,
         text="Get IAT",
         command=lambda: calculate_iat(file_path.get(), iat_entry),
     ).grid(row=15, column=2)
 
     tk.Button(
-        root,
+        page1,
         text="Get ITA",
         command=lambda: calculate_ita(file_path.get(), ita_entry),
     ).grid(row=16, column=2)
 
     tk.Button(
-        root,
+        page1,
         text="Unpack PE",
-        command=lambda: unpack_binary(file_path.get(), root),
+        command=lambda: unpack_binary(file_path.get(), page1),
     ).grid(row=19, column=2)
 
-    # Buttons calling respective functions
-    entry_point_entry = tk.Entry(root)
-    entry_point_entry.grid(row=0, column=11)
+    # Add new GUI components on page2
+    entry_point_entry = tk.Entry(page2)
+    entry_point_entry.grid(row=0, column=1)
     tk.Button(
-        root,
+        page2,
         text="Identify Entry Point",
         command=lambda: identify_entry_point(file_path.get(), entry_point_entry),
-    ).grid(row=0, column=10)
+    ).grid(row=0, column=0)
 
-    unpacking_stub_entry = tk.Entry(root)
-    unpacking_stub_entry.grid(row=1, column=11)
+    unpacking_stub_entry = tk.Entry(page2)
+    unpacking_stub_entry.grid(row=1, column=1)
     tk.Button(
-        root,
+        page2,
         text="Locate Unpacking Stub",
         command=lambda: locate_unpacking_stub(file_path.get(), unpacking_stub_entry),
-    ).grid(row=1, column=10)
-
-    import_table_entry = tk.Entry(root)
-    import_table_entry.grid(row=2, column=11)
+    ).grid(row=1, column=0)
+    
+    import_table_entry = tk.Entry(page2)
+    import_table_entry.grid(row=2, column=1)
     tk.Button(
-        root,
+        page2,
         text="Identify Import Table",
         command=lambda: identify_import_table(file_path.get(), import_table_entry),
-    ).grid(row=2, column=10)
+    ).grid(row=2, column=0)
 
-    import_descriptor_entry = tk.Entry(root)
-    import_descriptor_entry.grid(row=3, column=11)
+
+
+    image_import_descriptor_entry = tk.Entry(page2)
+    image_import_descriptor_entry.grid(row=3, column=1)
     tk.Button(
-        root,
+        page2,
         text="Identify IMAGE_IMPORT_DESCRIPTOR",
-        command=lambda: identify_import_descriptor(
-            file_path.get(), import_descriptor_entry
-        ),
-    ).grid(row=3, column=10)
+        command=lambda: identify_image_import_descriptor(file_path.get(), image_import_descriptor_entry),
+    ).grid(row=3, column=0)
 
-    first_thunk_entry = tk.Entry(root)
-    first_thunk_entry.grid(row=4, column=11)
+    
+    # Identify First Thunk
+    first_thunk_entry = tk.Entry(page2)  # Change page1 to page2
+    first_thunk_entry.grid(row=4, column=1)
     tk.Button(
-        root,
+        page2,  # Change page1 to page2
         text="Identify First Thunk",
         command=lambda: identify_first_thunk(file_path.get(), first_thunk_entry),
-    ).grid(row=4, column=10)
+    ).grid(row=4, column=0)
 
-    original_first_thunk_entry = tk.Entry(root)
-    original_first_thunk_entry.grid(row=5, column=11)
+    # Identify Original First Thunk
+    original_first_thunk_entry = tk.Entry(page2)  # Change page1 to page2
+    original_first_thunk_entry.grid(row=5, column=1)
     tk.Button(
-        root,
+        page2,  # Change page1 to page2
         text="Identify Original First Thunk",
-        command=lambda: identify_original_first_thunk(
-            file_path.get(), original_first_thunk_entry
-        ),
-    ).grid(row=5, column=10)
+        command=lambda: identify_original_first_thunk(file_path.get(), original_first_thunk_entry),
+    ).grid(row=5, column=0)
 
-    modify_unpacking_stub_entry = tk.Entry(root)
-    modify_unpacking_stub_entry.grid(row=6, column=11)
+    # Modify Unpacking Stub
+    modify_unpacking_stub_entry = tk.Entry(page2)  # Change page1 to page2
+    modify_unpacking_stub_entry.grid(row=6, column=1)
     tk.Button(
-        root,
+        page2,  # Change page1 to page2
         text="Modify Unpacking Stub",
-        command=lambda: modify_unpacking_stub(
-            file_path.get(), modify_unpacking_stub_entry
-        ),
-    ).grid(row=6, column=10)
+        command=lambda: modify_unpacking_stub(file_path.get(), modify_unpacking_stub_entry),
+    ).grid(row=6, column=0)
 
-    restore_iat_entry = tk.Entry(root)
-    restore_iat_entry.grid(row=7, column=11)
+    # Restore IAT
+    restore_iat_entry = tk.Entry(page2)  # Change page1 to page2
+    restore_iat_entry.grid(row=7, column=1)
     tk.Button(
-        root,
+        page2,  # Change page1 to page2
         text="Restore IAT",
         command=lambda: restore_iat(file_path.get(), restore_iat_entry),
-    ).grid(row=7, column=10)
+    ).grid(row=7, column=0)
 
     
     
-    
-    
+# Existing code...
+# ... 
+
     # Original Entry Point
-    # tk.Label(root, text="Original Entry Point (OEP)").grid(row=8, column=10)  # Remove this line
-    oep_entry = tk.Entry(root)
-    oep_entry.grid(row=8, column=11)  # Move this line up to row=8, column=11
+    oep_entry = tk.Entry(page2)
+    oep_entry.grid(row=8, column=1)
     tk.Button(
-        root,
+        page2,
         text="Identify OEP",
         command=lambda: identify_oep(file_path.get(), oep_entry),
-    ).grid(row=8, column=10)  # Move this line up to row=8, column=10
+    ).grid(row=8, column=0)
 
     # Dump Unpacked Executable
-    # tk.Label(root, text="Dump Unpacked Executable").grid(row=9, column=10)  # Remove this line
-    dump_entry = tk.Entry(root)
-    dump_entry.grid(row=9, column=11)  # Move this line up to row=9, column=11
+    dump_entry = tk.Entry(page2)
+    dump_entry.grid(row=9, column=1)
     tk.Button(
-        root,
+        page2,
         text="Dump Unpacked",
         command=lambda: dump_unpacked_executable(file_path.get(), dump_entry),
-    ).grid(row=9, column=10)  # Move this line up to row=9, column=10
+    ).grid(row=9, column=0)
 
     # Import Table RVA
-    # tk.Label(root, text="Import Table RVA").grid(row=10, column=10)  # Remove this line
-    import_table_rva_entry = tk.Entry(root)
-    import_table_rva_entry.grid(row=10, column=11)  # Move this line up to row=10, column=11
+    import_table_rva_entry = tk.Entry(page2)
+    import_table_rva_entry.grid(row=10, column=1)
     tk.Button(
-        root,
+        page2,
         text="Identify Import Table RVA",
         command=lambda: identify_import_table_rva(file_path.get(), import_table_rva_entry),
-    ).grid(row=10, column=10)  # Move this line up to row=10, column=10
+    ).grid(row=10, column=0)
 
-    # Fix Dump
-    # tk.Label(root, text="Fix Dump").grid(row=11, column=10)  # Remove this line
-    fix_dump_entry = tk.Entry(root)
-    fix_dump_entry.grid(row=11, column=11)  # Move this line up to row=11, column=11
+    
+    # Add ILT
+    tk.Label(page1, text="Import Lookup Table (ILT)").grid(row=17)
+    ilt_entry = tk.Entry(page1)
+    ilt_entry.grid(row=17, column=1)
+
     tk.Button(
-        root,
+        page1,
+        text="Identify ILT",
+        command=lambda: identify_ilt(file_path.get(), ilt_entry),
+    ).grid(row=17, column=2)
+
+        # Existing GUI components
+
+    tk.Button(
+        page1,
         text="Fix Dump",
         command=lambda: fix_dump(file_path.get(), fix_dump_entry),
-    ).grid(row=11, column=10)  # Move this line up to row=11, column=10
+    ).grid(row=12, column=10)  # Modify row number as needed
+
+    
+
+    # Export Table
+    tk.Label(page2, text="Export Table").grid(row=13, column=0)
+    export_table_entry = tk.Entry(page2)
+    export_table_entry.grid(row=13, column=1)
+    tk.Button(
+        page2,
+        text="Interact Export Table",
+        command=lambda: interact_export_table(file_path.get(), export_table_entry),
+    ).grid(row=13, column=0)
+
+    # Resource Table
+    tk.Label(page2, text="Resource Table").grid(row=14, column=0)
+    resource_table_entry = tk.Entry(page2)
+    resource_table_entry.grid(row=14, column=1)
+    tk.Button(
+        page2,
+        text="Interact Resource Table",
+        command=lambda: interact_resource_table(file_path.get(), resource_table_entry),
+    ).grid(row=14, column=0)
+
+    # Section Table
+    tk.Label(page2, text="Section Table").grid(row=15, column=0)
+    section_table_entry = tk.Entry(page2)
+    section_table_entry.grid(row=15, column=1)
+    tk.Button(
+        page2,
+        text="Interact Section Table",
+        command=lambda: interact_section_table(file_path.get(), section_table_entry),
+    ).grid(row=15, column=0)
+
+    # Relocation Table
+    tk.Label(page2, text="Relocation Table").grid(row=16, column=0)
+    relocation_table_entry = tk.Entry(page2)
+    relocation_table_entry.grid(row=16, column=1)
+    tk.Button(
+        page2,
+        text="Interact Relocation Table",
+        command=lambda: interact_relocation_table(file_path.get(), relocation_table_entry),
+    ).grid(row=16, column=0)
+
+    # Overlay
+    tk.Label(page2, text="Overlay").grid(row=17, column=0)
+    overlay_entry = tk.Entry(page2)
+    overlay_entry.grid(row=17, column=1)
+    tk.Button(
+        page2,
+        text="Interact Overlay",
+        command=lambda: interact_overlay(file_path.get(), overlay_entry),
+    ).grid(row=17, column=0)
+
+    
+    
+    # Anti-Debugging Technique Identifier
+    tk.Button(
+        page2,
+        text="Identify Anti-Debugging Techniques",
+        command=lambda: display_results(identify_anti_debugging_techniques(file_path.get())),
+    ).grid(row=1, column=3)  # Increase the row number by 1
+
+    # Keygen
+    tk.Button(
+        page2,
+        text="Open Keygen Window",
+        command=open_keygen_window,  # Call the open_keygen_window function when the button is clicked
+    ).grid(row=0, column=3)  # Place the "Open Keygen Window" button at row 0
+    # Move 'Create Code Cave' and 'Interact TLS Callbacks' one row down
+
+    # Create Code Cave
+    code_cave_entry = tk.Entry(page2)
+    code_cave_entry.grid(row=3, column=4)  # Change from row=1 to row=2
+    tk.Button(
+        page2,
+        text="Create Code Cave",
+        command=lambda: create_code_cave(file_path.get(), code_cave_entry),
+    ).grid(row=3, column=3)  # Change from row=1 to row=2
+
+    # TLS Callbacks Section
+    tls_callbacks_entry = tk.Entry(page2)
+    tls_callbacks_entry.grid(row=4, column=4)  # Change from row=2 to row=3
+    tk.Button(
+        page2,
+        text="Interact TLS Callbacks",
+        command=lambda: interact_tls_callbacks(file_path.get(), tls_callbacks_entry),
+    ).grid(row=4, column=3)  # Change from row=2 to row=3
+
+    # Add 'Find Code Cave' at the original position of 'Create Code Cave'
+    find_code_cave_entry = tk.Entry(page2)
+    find_code_cave_entry.grid(row=2, column=4)
+    tk.Button(
+        page2,
+        text="Find Code Cave",
+        command=lambda: find_code_cave(file_path.get(), find_code_cave_entry),
+    ).grid(row=2, column=3)
+
+# ... remaining code ...
+
+
+    # Automatic Deobfuscation
+    tk.Label(page2, text="Automatic Deobfuscation").grid(row=18, column=0, columnspan=2)
+    tk.Button(
+        page2,
+        text="Execute",
+        command=lambda: automatic_deobfuscation(file_path.get()),
+    ).grid(row=18, column=2)
+
+    # Binary Diffing
+    tk.Label(page2, text="Binary Diffing - File 1").grid(row=19, column=0)
+    binary_diffing_entry_1 = tk.Entry(page2)
+    binary_diffing_entry_1.grid(row=19, column=1)
+    tk.Button(
+        page2,
+        text="Browse",
+        command=lambda: browse_files(binary_diffing_entry_1),
+    ).grid(row=19, column=2)
+    
+    tk.Label(page2, text="Binary Diffing - File 2").grid(row=20, column=0)
+    binary_diffing_entry_2 = tk.Entry(page2)
+    binary_diffing_entry_2.grid(row=20, column=1)
+    tk.Button(
+        page2,
+        text="Browse",
+        command=lambda: browse_files(binary_diffing_entry_2),
+    ).grid(row=20, column=2)
+    
+    tk.Button(
+        page2,
+        text="Compare",
+        command=lambda: binary_diffing(
+            binary_diffing_entry_1.get(), binary_diffing_entry_2.get()
+        ),
+    ).grid(row=21, column=0, columnspan=3)
+    
+    # remaining code
+
+
+    tk.Button(
+        page2,
+        text="Binary Analysis Report",
+        command=lambda: binary_analysis_report(file_path.get(), root),
+    ).grid(row=22, column=2)
+
+    
+    oc = od.ObfuscationClassifier(od.PlatformType.ALL)
+
+    def check_obfuscation(command):
+        result = oc([command])
+        return bool(result[0])  # returns True if obfuscated, False otherwise
+
+    def detect():
+        command = obfuscation_entry.get()
+        if check_obfuscation(command):
+            messagebox.showinfo('Obfuscation Detection', 'The command is obfuscated.')
+        else:
+            messagebox.showinfo('Obfuscation Detection', 'The command is not obfuscated.')
+
+    
+    
+    # Obfuscation Detection
+    tk.Label(page2, text="Obfuscation Detection - Command").grid(row=23, column=0)
+    obfuscation_entry = tk.Entry(page2)
+    obfuscation_entry.grid(row=23, column=1)
+    tk.Button(
+        page2,
+        text="Detect Obfuscation",
+        command=detect,
+    ).grid(row=23, column=2)
+
+    
+
+    # Add a button to generate the expected reg file.
+    tk.Button(
+        page2,
+        text="Expected Reg",
+        command=lambda: generate_expected_reg(file_path_entry.get()),
+    ).grid(row=24, column=2)
+
+
+    # Raise page1 at the start
+    raise_frame(page1)
 
     root.mainloop()
 
 if __name__ == "__main__":
     main()
+    
+
