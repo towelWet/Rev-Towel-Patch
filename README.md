@@ -1,4 +1,4 @@
-## Dependencies 🛠️
+## Dependencies 
 
 1. pefile: `pip install pefile`
 2. lief: `pip install lief`
