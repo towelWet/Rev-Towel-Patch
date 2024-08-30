@@ -5,7 +5,6 @@
 3. capstone: `pip install capstone`
 4. keystone-engine: `pip install keystone-engine`
 5. difflib: `pip install difflib` 
-6. obfuscation_detection: `pip install difflib`
 7. 'pip install obfuscation_detection'
 8. tkinter: 'brew install python-tk'
    
