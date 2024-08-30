@@ -1,13 +1,17 @@
 ## Dependencies 
 
-1. pefile: `pip install pefile`
-2. lief: `pip install lief`
-3. capstone: `pip install capstone`
-4. keystone-engine: `pip install keystone-engine`
-5. difflib: `pip install difflib` 
-7. 'pip install obfuscation_detection'
-8. tkinter: 'brew install python-tk'
-   
+1. **pefile:** `pip install pefile`
+2. **lief:** `pip install lief`
+3. **capstone:** `pip install capstone`
+4. **keystone-engine:** `pip install keystone-engine`
+5. **difflib:** `pip install difflib`
+6. **obfuscation_detection:** `pip install obfuscation_detection`
+7. **tkinter:** `brew install python-tk`
+
+You may have to installe radare2:
+curl -Ls https://github.com/radareorg/radare2/releases/download/5.9.4/radare2-5.9.4.tar.xz | tar xJv
+radare2-5.9.4/sys/install.sh
+
 
 Note: If you are installing these packages in a production environment or you want to avoid conflicts with other packages, it might be a good idea to create a [virtual environment](https://docs.python.org/3/tutorial/venv.html) first.
 
