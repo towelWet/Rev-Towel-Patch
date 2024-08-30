@@ -1577,10 +1577,7 @@ def main():
         command=lambda: restore_iat(file_path.get(), restore_iat_entry),
     ).grid(row=7, column=0)
 
-    
-    
-# Existing code...
-# ... 
+
 
     # Original Entry Point
     oep_entry = tk.Entry(page2)
@@ -1621,7 +1618,6 @@ def main():
         command=lambda: identify_ilt(file_path.get(), ilt_entry),
     ).grid(row=17, column=2)
 
-        # Existing GUI components
 
     tk.Button(
         page1,
@@ -1725,7 +1721,6 @@ def main():
         command=lambda: find_code_cave(file_path.get(), find_code_cave_entry),
     ).grid(row=2, column=3)
 
-# ... remaining code ...
 
 
     # Automatic Deobfuscation
