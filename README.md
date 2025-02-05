@@ -1,3 +1,14 @@
+crackgui2.py is the new version - here's the new fix details:
+
+Safelisting 🤝
+We add np.core.multiarray.scalar to PyTorch’s “safe” globals so older NumPy-based checkpoints can be fully unpickled.
+
+Forcing Full Unpickle ⚙️
+The default in PyTorch ≥2.6 is weights_only=True, which breaks older model files. This patch “monkey-patches” torch.load so if weights_only isn’t specified, it becomes False—restoring the original, full unpickling behavior.
+
+Why? ❓
+Without this, you’d see _pickle.UnpicklingError: Weights only load failed for many older checkpoints in Python 3.13 / PyTorch 2.6+.
+
 ## Dependencies 
 
 1. **pefile:** `pip install pefile`
